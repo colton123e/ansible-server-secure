@@ -1,0 +1,12 @@
+---
+- name: Remove '{{ serverlegacyname }}' - U
+  apt:
+    name: '{{ serverlegacyname }}'
+    state: absent
+  when: ansible_facts['distribution'] == "Ubuntu"
+
+- name: Remove '{{ serverlegacyname }}' - C
+  dnf:
+    name: '{{ serverlegacyname }}'
+    state: absent
+  when: ansible_facts['distribution'] == "CentOS"

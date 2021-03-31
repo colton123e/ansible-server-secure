@@ -1,0 +1,173 @@
+---
+- hosts: [groupA]
+  vars_prompt:
+    - name: grubpw
+      prompt: Enter a grub password to use on all machines (Make sure it is correct, there is no validation)
+      private: no
+  become: yes
+  become_method: sudo
+  tasks:
+
+    - name: Update system Ubuntu #Ubuntu
+      apt:
+        name: '*'
+        state: latest
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Update system CentOS #CentOS
+      dnf:
+        name: '*'
+        state: latest
+      when: ansible_facts['distribution'] == "CentOS"
+
+# Enable automatic security updates
+    - name: Install unattended upgrades - U #Ubuntu
+      apt:
+        name: 'unattended-upgrades'
+        state: latest
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Install update notifier - U #Ubuntu
+      apt:
+        name: 'update-notifier-common'
+        state: latest
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+# SECURE BOOT SETTINGS
+
+    - name: Set root only for grub.cfg - U #Ubuntu
+      file:
+        path: /boot/grub/grub.cfg
+        owner: root
+        group: root
+        mode: 'og-rwx'
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Set root only for grub.cfg - C #CentOS
+      file:
+        path: /boot/grub2/grub.cfg
+        owner: root
+        group: root
+        mode: '0600'
+      when: ansible_facts['distribution'] == "CentOS"
+
+# Set grub password
+    - name: Install pip - U #Ubuntu
+      apt:
+        name: 'python3-pip'
+        state: latest
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Install pip - C #CentOS
+      dnf:
+        name: 'python3-pip'
+        state: latest
+      when: ansible_facts['distribution'] == "CentOS"
+
+    - name: Install pexpect
+      pip:
+        name: pexpect
+        state: latest
+        extra_args: --trusted-host pypi.python.org --trusted-host pypi.org --trusted-host files.pythonhosted.org
+
+    - name: Generate boot loader password - U #Ubuntu
+      expect:
+        command: grub-mkpasswd-pbkdf2
+        responses:
+          (?i)password: '{{ grubpw }}'
+      register: pw_hash
+      no_log: True
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Alter pw_hash - U #Ubuntu
+      shell: echo "{{ pw_hash.stdout }}" | sed -n 's/^PBKDF2 hash of your password is //p'
+      register: pw_hash2
+      no_log: True
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Configure grub info - U #Ubuntu
+      blockinfile:
+        path: /etc/grub.d/40_custom
+        block: |
+          cat << EOF
+          set superusers="root"
+          password_pbkdf2 root "{{ pw_hash2 }}"
+          EOF
+        owner: root
+        group: root
+        mode: '0200'
+        create: yes
+      no_log: True
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Enable boot/reboot w/o passwd - U #Ubuntu
+      lineinfile:
+        path: /etc/grub.d/10_linux
+        regexp: '^CLASS="--class gnu-linux --class gnu --class os"'
+        line: 'CLASS="--class gnu-linux --class gnu --class os --unrestricted"'
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Update the grub config - U #Ubuntu
+      command: update-grub
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Set boot loader password - C #CentOS
+      expect:
+        command: grub2-setpassword
+        responses:
+          (?i)password: '{{ grubpw }}'
+      no_log: True
+      when: ansible_facts['distribution'] == "CentOS"
+
+    - name: Update grub2-config - C #CentOS
+      command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      when: ansible_facts['distribution'] == "CentOS"
+
+    - name: Remove pexpect
+      pip:
+        name: pexpect
+        state: absent
+
+    - name: Remove pip - U #Ubuntu
+      apt:
+        name: 'python3-pip'
+        state: absent
+        autoremove: yes
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Remove pip - C #CentOS
+      dnf:
+        name: 'python3-pip'
+        state: absent
+        autoremove: yes
+      when: ansible_facts['distribution'] == "CentOS"
+
+# Remove GUI elements
+    - name: Remove the X window system
+      command: systemctl set-default multi-user.target
+
+    - name: Remove X Window System pacakges - U #Ubuntu
+      apt:
+        name: xserver-xorg*
+        state: absent
+        purge: yes
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Check if xfs service exists
+      stat: 'path=/etc/init.d/xfs'
+      register: servicestatus
+
+    - name: Disable X font server
+      service:
+        name: xfs
+        enabled: no
+        state: stopped
+      when: servicestatus.stat.exists
+
+#Message to state sys updates and secure boot config is done
+    - name: display complete message
+      debug:
+        msg: 1 -- Done with sys update and secure boot config
+
+- name: Start System Updates and Secure Boot Settings
+  import_playbook: ServerSecure2.yml

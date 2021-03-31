@@ -1,0 +1,210 @@
+---
+- hosts: [groupA]
+  become: yes
+  become_user: root
+  become_method: sudo
+  tasks:
+
+# NETWORK SECURITY AND FIREWALL CONFIG
+# Firewall config
+    - name: Enable the firewall - U #Ubuntu
+      community.general.ufw:
+        state: enabled
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Allow ssh - U #Ubuntu
+      community.general.ufw:
+        rule: allow
+        port: ssh
+        proto: tcp
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Enable the firewall logging - U #Ubuntu
+      community.general.ufw:
+        logging: 'on'
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Configure Loopback In - U #Ubuntu
+      community.general.ufw:
+        rule: allow
+        direction: in
+        interface: lo
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Configure Loopback Out - U #Ubuntu
+      community.general.ufw:
+        rule: allow
+        direction: out
+        interface: lo
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Configure Loopback In IPv4 Deny - U #Ubuntu
+      community.general.ufw:
+        rule: deny
+        direction: in
+        from_ip: 127.0.0.0/8
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Configure Loopback In IPv6 Deny - U #Ubuntu
+      community.general.ufw:
+        rule: deny
+        direction: in
+        from_ip: ::1
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Configure outbound connections - U #Ubuntu
+      community.general.ufw:
+        rule: allow
+        direction: out
+      when: ansible_facts['distribution'] == "Ubuntu"
+
+    - name: Configure the firewall - C #CentOS
+      ansible.posix.firewalld:
+        state: enabled
+        permanent: yes
+        service: ssh
+        zone: internal
+        immediate: yes
+      when: ansible_facts['distribution'] == "CentOS"
+
+    - name: Block ICMP timestamp request - C #CentOS
+      ansible.posix.firewalld:
+        rich_rule: rule family="ipv4" icmp-type name="timestamp-request" drop
+        state: enabled
+        permanent: yes
+        immediate: yes
+      when: ansible_facts['distribution'] == "CentOS"
+
+    - name: Block ICMP timestamp reply - C #CentOS
+      ansible.posix.firewalld:
+        rich_rule: rule family="ipv4" icmp-type name="timestamp-reply" drop
+        state: enabled
+        permanent: yes
+        immediate: yes
+      when: ansible_facts['distribution'] == "CentOS"
+
+# Step 26 of UT Checklist
+    - name: Disable IPv4 forwarding
+      sysctl:
+        name: net.ipv4.conf.all.forwarding
+        value: '0'
+
+    - name: Disable IPv6 forwarding
+      sysctl:
+        name: net.ipv6.conf.all.forwarding
+        value: '0'
+
+# Step 27 of UT Checklist
+
+    - name: Disable IPv4 send redirects
+      sysctl:
+        name: net.ipv4.conf.all.send_redirects
+        value: '0'
+
+
+# Step 28 of UT Checklist
+    - name: Disable IPv4 accept all source route
+      sysctl:
+        name: net.ipv4.conf.all.accept_source_route
+        value: '0'
+
+#    - name: Disable IPv4 accept default source route
+#      sysctl:
+#        name: net.ipv4.conf.defualt.accept_source_route
+#        value: '0'
+
+    - name: Disable IPv6 accept all source route
+      sysctl:
+        name: net.ipv6.conf.all.accept_source_route
+        value: '0'
+
+    - name: Disable IPv6 accept default source route
+      sysctl:
+        name: net.ipv6.conf.default.accept_source_route
+        value: '0'
+
+
+# Step 29 of UT Checklist
+    - name: Disable ICMP redirect acceptance ipv4
+      sysctl:
+        name: net.ipv4.conf.all.accept_redirects
+        value: '0'
+
+    - name: Disable ICMP default redirect acceptance ipv4
+      sysctl:
+        name: net.ipv4.conf.default.accept_redirects
+        value: '0'
+
+    - name: Disable ICMP default redirect acceptance ipv6
+      sysctl:
+        name: net.ipv6.conf.default.accept_redirects
+        value: '0'
+
+    - name: Disable ICMP secure redirect acceptance ipv4
+      sysctl:
+        name: net.ipv4.conf.all.secure_redirects
+        value: '0'
+        sysctl_set: yes
+
+    - name: Disable ICMP default secure redirect acceptance ipv4
+      sysctl:
+        name: net.ipv4.conf.default.secure_redirects
+        value: '0'
+        sysctl_set: yes
+
+    - name: Disable  default send redirects ipv4
+      sysctl:
+        name: net.ipv4.conf.default.send_redirects
+        value: '0'
+
+    - name: Disable ICMP default redirect acceptance ipv6
+      sysctl:
+        name: net.ipv6.conf.all.accept_redirects
+        value: '0'
+
+    - name: Disable TCP timestamp responses
+      sysctl:
+        name: net.ipv4.tcp_timestamps
+        value: '0'
+
+    - name: Disable ip forwards
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '0'
+
+# Step 30 of UT Checklist
+    - name: Enable ignore broadcast replies
+      sysctl:
+        name: net.ipv4.icmp_echo_ignore_broadcasts
+        value: '1'
+
+# Step 31 of UT Checklist
+    - name: Enable bad error message protection
+      sysctl:
+        name: net.ipv4.icmp_ignore_bogus_error_responses
+        value: '1'
+
+# Step 32 of UT Checklist
+    - name: Enable TCP SYN cookies
+      sysctl:
+        name: net.ipv4.tcp_syncookies
+        value: '1'
+        reload: yes
+
+    - name: Ipv4 route flush set to 1
+      sysctl:
+        name: net.ipv4.route.flush
+        value: '1'
+
+    - name: Ipv6 route flush set to 1
+      sysctl:
+        name: net.ipv6.route.flush
+        value: '1'
+
+#Message to state this set of tasks is complete
+    - name: display complete message
+      debug:
+        msg: 3 -- Done with Network Security, Firewall, and Remote Admin Config
+
+- name: Start System Integrity and Intrusion Detection
+  import_playbook: ServerSecure4.yml
